@@ -1,0 +1,71 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions to authenticate and check roles
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/members/$(request.auth.uid)).data;
+    }
+
+    function getRole() {
+      return getUserData().role;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && getRole() == 'ADMINISTRATEUR';
+    }
+
+    function isSecretaire() {
+      return isAuthenticated() && (getRole() == 'SECRETAIRE' || isAdmin());
+    }
+
+    function isTresorier() {
+      return isAuthenticated() && (getRole() == 'TRESORIER' || isAdmin());
+    }
+
+    // Members collection
+    match /members/{memberId} {
+      // Membres can read their own profile, Secretary/Treasurer/Admin can read member directory
+      allow read: if isAuthenticated() && (request.auth.uid == memberId || isSecretaire() || isTresorier());
+      
+      // Only Administrator can create or update member records (especially role and soldeArrieres)
+      // Users CANNOT elevate their own role
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Event Campaigns collection
+    match /event_campaigns/{campaignId} {
+      // All authenticated members can view active campaigns
+      allow read: if isAuthenticated();
+
+      // Only Secretary or Admin can create, modify, or close campaigns
+      allow create, update, delete: if isSecretaire();
+    }
+
+    // Cotisations collection
+    match /cotisations/{transactionId} {
+      // Members can read their own cotisations; Treasurer/Admin can read all
+      allow read: if isAuthenticated() && (
+        resource.data.membreUid == request.auth.uid || isTresorier()
+      );
+
+      // Only Treasurer or Admin can record cotisations or validate Orange Money SMS
+      // Document ID must match idTransaction to enforce idempotence
+      allow create: if isTresorier() &&
+                       request.resource.id == request.resource.data.idTransaction &&
+                       request.resource.data.montant > 0;
+
+      // Cotisations are immutable audit logs - no unauthorized deletes or edits
+      allow update, delete: if isAdmin();
+    }
+
+    // Default deny all other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
