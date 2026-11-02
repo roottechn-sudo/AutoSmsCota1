@@ -1,3 +1,6 @@
 <resources>
     <string name="app_name">AutoSmsCota</string>
+    <string name="widget_treasurer_title">Trésorerie RAVA</string>
+    <string name="widget_treasurer_description">Affiche le solde actuel de la caisse et les cotisations en attente</string>
+
 </resources>

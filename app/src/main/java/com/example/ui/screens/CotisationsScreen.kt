@@ -19,14 +19,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SyncProblem
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -74,6 +78,7 @@ fun CotisationsScreen(
 
     var searchQuery by remember { mutableStateOf("") }
     var methodFilter by remember { mutableStateOf("ALL") } // "ALL", "ORANGE_MONEY", "ESPECE"
+    var statusFilter by remember { mutableStateOf("ALL") } // "ALL", "VALIDEE", "EN_ATTENTE"
 
     val currentRole = currentUser?.role ?: UserRole.MEMBRE
     val canRecord = DroitsService.canRecordCotisation(currentRole)
@@ -92,6 +97,12 @@ fun CotisationsScreen(
             else -> true
         }
 
+        val matchesStatus = when (statusFilter) {
+            "VALIDEE" -> cotisation.isValidee
+            "EN_ATTENTE" -> cotisation.isEnAttente
+            else -> true
+        }
+
         val member = members.find { it.uid == cotisation.membreUid }
         val memberName = member?.nomComplet ?: ""
         val campaign = campaigns.find { it.idCampagne == cotisation.idCampagne }
@@ -103,7 +114,7 @@ fun CotisationsScreen(
                 campaignTitle.contains(searchQuery, ignoreCase = true) ||
                 (cotisation.referenceExterne?.contains(searchQuery, ignoreCase = true) == true)
 
-        matchesMethod && matchesSearch
+        matchesMethod && matchesStatus && matchesSearch
     }
 
     Box(modifier = modifier.fillMaxSize().testTag("cotisations_screen")) {
@@ -174,6 +185,30 @@ fun CotisationsScreen(
                 }
             }
 
+            // Filtres par statut (Anti-Spoofing & Validation)
+            item {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    FilterChip(
+                        selected = statusFilter == "ALL",
+                        onClick = { statusFilter = "ALL" },
+                        label = { Text("Tous statuts") }
+                    )
+                    FilterChip(
+                        selected = statusFilter == "VALIDEE",
+                        onClick = { statusFilter = "VALIDEE" },
+                        label = { Text("Validées (${baseList.count { it.isValidee }})") }
+                    )
+                    FilterChip(
+                        selected = statusFilter == "EN_ATTENTE",
+                        onClick = { statusFilter = "EN_ATTENTE" },
+                        label = { Text("En attente SMS (${baseList.count { it.isEnAttente }})") }
+                    )
+                }
+            }
+
             if (filteredList.isEmpty()) {
                 item {
                     Surface(
@@ -199,7 +234,7 @@ fun CotisationsScreen(
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                             )
                             Text(
-                                text = "Saisissez un versement en espèces ou importez les SMS Orange Money.",
+                                text = "Saisissez un versement ou importez les SMS Orange Money.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -213,12 +248,16 @@ fun CotisationsScreen(
 
                     CotisationCardItem(
                         cotisation = cotisation,
-                        memberName = member?.nomComplet ?: "Membre N° ${cotisation.membreUid}",
+                        memberName = member?.nomComplet ?: cotisation.getDisplayName(null),
                         campaignTitle = campaign?.titre ?: cotisation.idCampagne,
                         formattedAmount = viewModel.formatFcfa(cotisation.montant),
                         formattedDate = viewModel.formatDate(cotisation.datePaiement),
+                        canValidate = canRecord,
+                        onValidate = {
+                            viewModel.validateCotisation(cotisation.idTransaction)
+                        },
                         onClick = {
-                            viewModel.selectReceipt(cotisation)
+                            if (!cotisation.isEnAttente) viewModel.selectReceipt(cotisation)
                         }
                     )
                 }
@@ -262,11 +301,18 @@ fun CotisationCardItem(
     campaignTitle: String,
     formattedAmount: String,
     formattedDate: String,
+    canValidate: Boolean,
+    onValidate: () -> Unit,
     onClick: () -> Unit
 ) {
+    val gateway = com.example.data.model.PaymentGateway.fromId(cotisation.methodePaiement)
+    val isPending = cotisation.isEnAttente
+
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isPending) OrangeMoneyContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surface
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = Modifier
             .fillMaxWidth()
@@ -287,21 +333,17 @@ fun CotisationCardItem(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(
-                                if (cotisation.methodePaiement == "ORANGE_MONEY")
-                                    OrangeMoneyContainer
-                                else EmeraldContainer
-                            ),
+                            .background(gateway.brandColor.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = if (cotisation.methodePaiement == "ORANGE_MONEY")
-                                Icons.Default.PhoneAndroid
-                            else Icons.Default.Payments,
+                            imageVector = when {
+                                gateway.isMobileMoney -> Icons.Default.PhoneAndroid
+                                gateway.isInternational -> Icons.Default.CreditCard
+                                else -> Icons.Default.Payments
+                            },
                             contentDescription = null,
-                            tint = if (cotisation.methodePaiement == "ORANGE_MONEY")
-                                OrangeMoneyAccent
-                            else EmeraldPrimary,
+                            tint = gateway.brandColor,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -312,20 +354,37 @@ fun CotisationCardItem(
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                         )
                         Text(
-                            text = campaignTitle,
+                            text = "${gateway.displayName} • $campaignTitle",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
 
-                Text(
-                    text = formattedAmount,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        color = EmeraldPrimary
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = formattedAmount,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (isPending) OrangeMoneyAccent else EmeraldPrimary
+                        )
                     )
-                )
+
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = if (isPending) OrangeMoneyAccent.copy(alpha = 0.2f) else Color(0xFFE8F5E9)
+                    ) {
+                        Text(
+                            text = if (isPending) "EN ATTENTE" else "VALIDÉE",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isPending) OrangeMoneyAccent else Color(0xFF2E7D32)
+                            ),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -370,29 +429,58 @@ fun CotisationCardItem(
                         }
                     }
 
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = EmeraldPrimary.copy(alpha = 0.1f)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    if (!isPending) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = EmeraldPrimary.copy(alpha = 0.1f)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Receipt,
-                                contentDescription = null,
-                                tint = EmeraldPrimary,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Ouvrir Reçu",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = EmeraldPrimary
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Receipt,
+                                    contentDescription = null,
+                                    tint = EmeraldPrimary,
+                                    modifier = Modifier.size(12.dp)
                                 )
-                            )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Reçu",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = EmeraldPrimary
+                                    )
+                                )
+                            }
                         }
+                    }
+                }
+            }
+
+            // Bouton de validation rapide si en attente (Anti-spoofing SMS)
+            if (isPending && canValidate) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Vérification requise :",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                    Button(
+                        onClick = onValidate,
+                        colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.testTag("validate_cotisation_btn_${cotisation.idTransaction}")
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Valider la Recette", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

@@ -17,7 +17,12 @@ data class MemberEntity(
     val categorie: String = "Membre Actif", // "Membre Actif", "Membre Fondateur", "Membre d'Honneur", "Étudiant / Jeunesse", "Sympathisant"
     val dateAdhesion: Long = System.currentTimeMillis(),
     val notes: String? = null,
-    val joursRetardEstimes: Int = 0 // Jours de retard pour les arriérés
+    val joursRetardEstimes: Int = 0, // Jours de retard pour les arriérés
+    val matricule: String = "", // Ex: KEMET019325-BF
+    val sexe: String = "Masculin", // Masculin / Féminin
+    val residence: String = "Ouagadougou",
+    val contactUrgenceNom: String = "", // Ex: PAKODE Assami
+    val contactUrgenceTel: String = "" // Ex: 76 47 72 67
 ) {
     val nomComplet: String
         get() = "$prenom $nom".trim()

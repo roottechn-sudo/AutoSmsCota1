@@ -15,7 +15,7 @@ import com.example.data.model.MemberEntity
         EventCampaignEntity::class,
         CotisationEntity::class
     ],
-    version = 2,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

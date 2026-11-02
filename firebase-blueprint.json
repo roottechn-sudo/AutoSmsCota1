@@ -1,0 +1,61 @@
+{
+  "entities": {
+    "members": {
+      "collection": "members",
+      "fields": {
+        "uid": { "type": "string" },
+        "nom": { "type": "string" },
+        "prenom": { "type": "string" },
+        "telephone": { "type": "string" },
+        "role": { "type": "string" },
+        "carteValide": { "type": "boolean" },
+        "soldeArrieres": { "type": "number" },
+        "email": { "type": "string" },
+        "categorie": { "type": "string" },
+        "matricule": { "type": "string" },
+        "sexe": { "type": "string" },
+        "residence": { "type": "string" },
+        "contactUrgenceNom": { "type": "string" },
+        "contactUrgenceTel": { "type": "string" },
+        "dateAdhesion": { "type": "number" },
+        "notes": { "type": "string" },
+        "joursRetardEstimes": { "type": "number" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    },
+    "cotisations": {
+      "collection": "cotisations",
+      "fields": {
+        "idTransaction": { "type": "string" },
+        "idCampagne": { "type": "string" },
+        "membreUid": { "type": "string" },
+        "montant": { "type": "number" },
+        "datePaiement": { "type": "number" },
+        "methodePaiement": { "type": "string" },
+        "enregistreParUid": { "type": "string" },
+        "recuGenere": { "type": "boolean" },
+        "referenceExterne": { "type": "string" },
+        "isAnonyme": { "type": "boolean" },
+        "donateurNom": { "type": "string" },
+        "donateurTelephone": { "type": "string" },
+        "typeContributeur": { "type": "string" },
+        "timestamp": { "type": "timestamp" }
+      }
+    },
+    "event_campaigns": {
+      "collection": "event_campaigns",
+      "fields": {
+        "idCampagne": { "type": "string" },
+        "titre": { "type": "string" },
+        "description": { "type": "string" },
+        "dateCreation": { "type": "number" },
+        "dateCloture": { "type": "number" },
+        "estCloture": { "type": "boolean" },
+        "budgetEstime": { "type": "number" },
+        "budgetReel": { "type": "number" },
+        "creeParUid": { "type": "string" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    }
+  }
+}

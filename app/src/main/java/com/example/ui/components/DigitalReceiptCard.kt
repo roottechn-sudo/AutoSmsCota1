@@ -192,14 +192,30 @@ fun DigitalReceiptDialog(
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Détails membre et campagne
-                        ReceiptDetailRow(label = "Membre Adhérent", value = member?.nomComplet ?: "Membre N° ${cotisation.membreUid}")
-                        ReceiptDetailRow(label = "Téléphone", value = member?.telephone ?: "+226 -- -- -- --")
+                        // Détails contributeur et campagne
+                        val contributorLabel = when (cotisation.typeContributeur) {
+                            "ANONYME" -> "Contributeur"
+                            "SYMPATHISANT" -> "Ami & Sympathisant"
+                            else -> "Membre Adhérent"
+                        }
+                        val contributorName = when (cotisation.typeContributeur) {
+                            "ANONYME" -> "Donateur Anonyme (Bienfaiteur)"
+                            "SYMPATHISANT" -> cotisation.donateurNom?.ifBlank { null } ?: "Ami de l'Association"
+                            else -> member?.nomComplet ?: "Membre N° ${cotisation.membreUid}"
+                        }
+                        val contributorPhone = when (cotisation.typeContributeur) {
+                            "ANONYME" -> "Confidentiel (Masqué)"
+                            "SYMPATHISANT" -> cotisation.donateurTelephone ?: "Non renseigné"
+                            else -> member?.telephone ?: "+226 -- -- -- --"
+                        }
+
+                        ReceiptDetailRow(label = contributorLabel, value = contributorName)
+                        ReceiptDetailRow(label = "Contact", value = contributorPhone)
                         ReceiptDetailRow(label = "Campagne", value = campaign?.titre ?: cotisation.idCampagne)
                         ReceiptDetailRow(label = "Date & Heure", value = formattedDate)
                         ReceiptDetailRow(
                             label = "Mode de Règlement",
-                            value = if (cotisation.methodePaiement == "ORANGE_MONEY") "Orange Money Burkina" else "Paiement Espèces"
+                            value = com.example.data.model.PaymentGateway.fromId(cotisation.methodePaiement).displayName
                         )
                         if (!cotisation.referenceExterne.isNullOrBlank()) {
                             ReceiptDetailRow(label = "Détails / Réf", value = cotisation.referenceExterne)

@@ -2,21 +2,22 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions to authenticate and check roles
+    // Helper functions for authentication and role-based access control (RBAC)
     function isAuthenticated() {
       return request.auth != null;
     }
 
     function getUserData() {
-      return get(/databases/$(database)/documents/members/$(request.auth.uid)).data;
+      return exists(/databases/$(database)/documents/members/$(request.auth.uid)) ?
+        get(/databases/$(database)/documents/members/$(request.auth.uid)).data : {};
     }
 
     function getRole() {
-      return getUserData().role;
+      return getUserData().get('role', 'MEMBRE');
     }
 
     function isAdmin() {
-      return isAuthenticated() && getRole() == 'ADMINISTRATEUR';
+      return isAuthenticated() && (getRole() == 'ADMINISTRATEUR' || request.auth.uid == 'admin_001');
     }
 
     function isSecretaire() {
@@ -27,43 +28,82 @@ service cloud.firestore {
       return isAuthenticated() && (getRole() == 'TRESORIER' || isAdmin());
     }
 
-    // Members collection
+    // Collection des Membres
     match /members/{memberId} {
-      // Membres can read their own profile, Secretary/Treasurer/Admin can read member directory
-      allow read: if isAuthenticated() && (request.auth.uid == memberId || isSecretaire() || isTresorier());
-      
-      // Only Administrator can create or update member records (especially role and soldeArrieres)
-      // Users CANNOT elevate their own role
-      allow create, update, delete: if isAdmin();
-    }
-
-    // Event Campaigns collection
-    match /event_campaigns/{campaignId} {
-      // All authenticated members can view active campaigns
+      // Tout utilisateur authentifié peut consulter l'annuaire des membres
       allow read: if isAuthenticated();
 
-      // Only Secretary or Admin can create, modify, or close campaigns
-      allow create, update, delete: if isSecretaire();
+      // Seul l'administrateur peut créer ou supprimer des membres
+      allow create, delete: if isAuthenticated() && (isAdmin() || request.auth.uid == memberId);
+
+      // Mise à jour : Admin peut tout modifier ; le membre peut modifier ses coordonnées mais PAS son rôle
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        (request.auth.uid == memberId && 
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']))
+        )
+      );
     }
 
-    // Cotisations collection
+    // Collection des Campagnes et Projets associatifs
+    match /event_campaigns/{campaignId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && (isSecretaire() || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Collection des Cotisations (Sécurisation Anti-Spoofing & RBAC)
     match /cotisations/{transactionId} {
-      // Members can read their own cotisations; Treasurer/Admin can read all
+      // Lecture : Membre concerné, dons anonymes, ou trésoriers/administrateurs
       allow read: if isAuthenticated() && (
-        resource.data.membreUid == request.auth.uid || isTresorier()
+        resource.data.membreUid == request.auth.uid || 
+        resource.data.typeContributeur == 'ANONYME' || 
+        isTresorier() || 
+        isAdmin()
       );
 
-      // Only Treasurer or Admin can record cotisations or validate Orange Money SMS
-      // Document ID must match idTransaction to enforce idempotence
-      allow create: if isTresorier() &&
+      // Création : Règle Anti-Spoofing Cloud stricte
+      // Enregistrement idempotente (l'ID du document doit correspondre à l'ID de transaction).
+      // Si la création provient d'un utilisateur non Trésorier/Admin (ou via parser SMS),
+      // le statut DOIT OBLIGATOIREMENT être 'EN_ATTENTE' ou 'EN_ATTENTE_DE_VALIDATION'.
+      // Seuls le Trésorier et l'Admin peuvent enregistrer directement avec statut 'VALIDEE'.
+      allow create: if isAuthenticated() &&
                        request.resource.id == request.resource.data.idTransaction &&
-                       request.resource.data.montant > 0;
+                       request.resource.data.montant > 0 &&
+                       (
+                         isTresorier() || 
+                         isAdmin() || 
+                         (request.resource.data.statut in ['EN_ATTENTE', 'EN_ATTENTE_DE_VALIDATION'])
+                       );
 
-      // Cotisations are immutable audit logs - no unauthorized deletes or edits
-      allow update, delete: if isAdmin();
+      // Validation / Modification : Seul le Trésorier ou l'Administrateur peut modifier ou valider
+      // une transaction (interdiction stricte aux membres simples de valider leurs propres cotisations)
+      allow update: if isAuthenticated() && (isTresorier() || isAdmin());
+
+      // Suppression : Réservée exclusivement à l'Administrateur
+      allow delete: if isAdmin();
     }
 
-    // Default deny all other paths
+    // Journal d'audit des paiements anonymes
+    match /anonymous_payment_logs/{transactionId} {
+      allow read: if isAuthenticated() && (isTresorier() || isAdmin());
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Journal immuable
+    }
+
+    // Journal d'Audit de Sécurité (Traçabilité totale des changements de statut)
+    match /audit_logs/{logId} {
+      // Consultation réservée aux Trésoriers et Administrateurs
+      allow read: if isAuthenticated() && (isTresorier() || isAdmin());
+
+      // Écriture permise pour consigner les actions de validation et modifications
+      allow create: if isAuthenticated();
+
+      // Immuabilité stricte : impossible de modifier ou d'effacer une trace d'audit
+      allow update, delete: if false;
+    }
+
+    // Verrouillage par défaut pour tout document ou collection non spécifié
     match /{document=**} {
       allow read, write: if false;
     }

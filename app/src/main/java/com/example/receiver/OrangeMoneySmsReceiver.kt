@@ -47,7 +47,7 @@ class OrangeMoneySmsReceiver : BroadcastReceiver() {
                     val db = AppDatabase.getInstance(context)
                     // Associe à la première campagne active trouvée ou campagne par défaut
                     val activeCampaign = db.campaignDao().getActiveCampaignsFlow()
-                    // Insérer avec clé primaire = idTransaction (idempotence)
+                    // Mesure anti-spoofing : toute transaction SMS doit impérativement être EN_ATTENTE
                     val cotisation = CotisationEntity(
                         idTransaction = parsed.transactionId,
                         idCampagne = "CAMP_ANNUELLE_2026",
@@ -56,13 +56,20 @@ class OrangeMoneySmsReceiver : BroadcastReceiver() {
                         datePaiement = parsed.timestamp,
                         methodePaiement = "ORANGE_MONEY",
                         enregistreParUid = "AUTO_SMS_RECEIVER",
-                        recuGenere = true,
+                        recuGenere = false,
                         syncedToFirebase = false,
-                        referenceExterne = "${parsed.party} [SMS Temps Réel]"
+                        referenceExterne = "${parsed.party} [SMS Temps Réel Anti-Spoofing]",
+                        statut = com.example.data.model.StatutCotisation.EN_ATTENTE.code
                     )
                     val inserted = db.cotisationDao().insertIgnoreDuplicate(cotisation)
                     if (inserted != -1L) {
-                        Log.i("OrangeMoneySmsReceiver", "Cotisation enregistrée automatiquement : ${cotisation.idTransaction}")
+                        Log.i("OrangeMoneySmsReceiver", "Cotisation enregistrée en attente de validation : ${cotisation.idTransaction}")
+                        try {
+                            val firestoreService = com.example.data.firebase.FirestoreService(context)
+                            firestoreService.saveCotisation(cotisation)
+                        } catch (e: Exception) {
+                            Log.w("OrangeMoneySmsReceiver", "Sync Firestore différée", e)
+                        }
                     } else {
                         Log.w("OrangeMoneySmsReceiver", "Cotisation déjà existante ignorée : ${cotisation.idTransaction}")
                     }

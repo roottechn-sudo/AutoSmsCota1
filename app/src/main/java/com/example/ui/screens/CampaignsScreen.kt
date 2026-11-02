@@ -18,9 +18,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.ui.platform.LocalContext
+import com.example.util.CalendarSyncHelper
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -328,15 +331,33 @@ fun CampaignCard(
                 strokeCap = StrokeCap.Round
             )
 
-            if (!campaign.estCloture && canClose) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+            val context = LocalContext.current
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = { CalendarSyncHelper.syncCampaignToCalendar(context, campaign) },
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.testTag("sync_calendar_${campaign.idCampagne}")
                 ) {
+                    Icon(
+                        imageVector = Icons.Default.CalendarToday,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Agenda", fontSize = 12.sp)
+                }
+
+                if (!campaign.estCloture && canClose) {
                     OutlinedButton(
                         onClick = onClose,
-                        shape = RoundedCornerShape(8.dp)
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.testTag("close_campaign_${campaign.idCampagne}")
                     ) {
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
@@ -344,7 +365,7 @@ fun CampaignCard(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Clôturer la Campagne")
+                        Text("Clôturer", fontSize = 12.sp)
                     }
                 }
             }

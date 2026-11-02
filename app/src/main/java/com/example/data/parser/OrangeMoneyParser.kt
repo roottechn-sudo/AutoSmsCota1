@@ -65,7 +65,7 @@ object OrangeMoneyParser {
         // 1. Extraire l'identifiant de transaction
         val transMatcher = REGEX_TRANSACTION_ID.matcher(cleanBody)
         val transId = if (transMatcher.find()) {
-            transMatcher.group(1)?.trim() ?: ""
+            transMatcher.group(1)?.trim()?.trimEnd('.') ?: ""
         } else {
             ""
         }

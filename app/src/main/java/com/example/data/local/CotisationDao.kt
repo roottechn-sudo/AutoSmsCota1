@@ -48,4 +48,13 @@ interface CotisationDao {
 
     @Query("SELECT COUNT(*) FROM cotisations")
     suspend fun getCotisationCount(): Int
+
+    @Query("UPDATE cotisations SET statut = :nouveauStatut, valideParUid = :valideParUid, dateValidation = :timestamp, syncedToFirebase = 0 WHERE idTransaction = :idTransaction")
+    suspend fun updateStatut(idTransaction: String, nouveauStatut: String, valideParUid: String, timestamp: Long)
+
+    @Query("SELECT * FROM cotisations WHERE statut = 'EN_ATTENTE' ORDER BY datePaiement DESC")
+    fun getPendingCotisationsFlow(): Flow<List<CotisationEntity>>
+
+    @Query("SELECT COUNT(*) FROM cotisations WHERE statut = 'EN_ATTENTE'")
+    suspend fun getPendingCotisationCount(): Int
 }

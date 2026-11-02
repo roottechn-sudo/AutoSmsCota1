@@ -19,4 +19,14 @@ class Converters {
             }
         } ?: UserRole.MEMBRE
     }
+
+    @TypeConverter
+    fun fromStatutCotisation(statut: com.example.data.model.StatutCotisation?): String? {
+        return statut?.code
+    }
+
+    @TypeConverter
+    fun toStatutCotisation(value: String?): com.example.data.model.StatutCotisation {
+        return com.example.data.model.StatutCotisation.fromCode(value)
+    }
 }
